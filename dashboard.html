@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adblock DNS — Dashboard</title>
+<style>
+  :root { color-scheme: dark; --bg:#0f1115; --card:#1a1d24; --line:#262a33; --mute:#9aa0a6; --fg:#e6e6e6; --acc:#7fb2ff; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 20px; background: var(--bg); color: var(--fg); max-width: 1100px; margin-inline: auto; }
+  h1 { font-size: 1.35rem; margin: 0 0 4px; }
+  h2 { font-size: 1.02rem; margin: 26px 0 10px; }
+  .sub { color: var(--mute); font-size: .88rem; }
+  .bar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .tabs { display:flex; flex-wrap:wrap; gap:6px; margin: 14px 0 6px; border-bottom:1px solid var(--line); padding-bottom:8px; }
+  button, .btn { background:#262c38; color:var(--fg); border:1px solid #333a48; border-radius:8px; padding:6px 12px; font:inherit; font-size:.88rem; cursor:pointer; }
+  button:hover { background:#2f3646; }
+  button.on { background:var(--acc); color:#0b1220; border-color:var(--acc); font-weight:600; }
+  button.danger { color:#ff9b9b; }
+  button.sm { padding:2px 8px; font-size:.78rem; }
+  input[type=text], input[type=time], input[type=password], select { background:#12151b; color:var(--fg); border:1px solid #333a48; border-radius:8px; padding:6px 10px; font:inherit; font-size:.88rem; }
+  input[type=text] { min-width: 220px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; }
+  .card { background:var(--card); border-radius:10px; padding:14px; }
+  .card .n { font-size:1.7rem; font-weight:700; }
+  .card .l { font-size:.8rem; color:var(--mute); margin-top:4px; }
+  table { width:100%; border-collapse:collapse; font-size:.9rem; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  th { color:var(--mute); font-weight:500; }
+  .tag { display:inline-block; padding:1px 8px; border-radius:10px; font-size:.75rem; background:#2a3a52; color:#7fb2ff; }
+  .tag.malware, .tag.beacon { background:#4a2020; color:#ff8b8b; }
+  .tag.doh { background:#453a1f; color:#ffcf7f; }
+  .tag.dga { background:#3a2a52; color:#c9a0ff; }
+  .tag.gambling, .tag.porn { background:#4a2a1f; color:#ff9f5b; }
+  .tag.social { background:#1f4a3a; color:#7fe0b4; }
+  .tag.custom { background:#3a3a3a; color:#ddd; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:6px 0; }
+  .box { background:var(--card); border-radius:10px; padding:14px; margin-bottom:12px; }
+  .banner { background:#453a1f; color:#ffcf7f; border-radius:10px; padding:10px 14px; margin-bottom:12px; display:none; }
+  .chip { display:inline-flex; gap:6px; align-items:center; background:#12151b; border:1px solid #333a48; border-radius:14px; padding:2px 4px 2px 10px; font-size:.82rem; margin:2px; }
+  .chip button { border:0; background:none; padding:0 6px; color:#ff9b9b; }
+  label.ck { display:inline-flex; gap:4px; align-items:center; margin-right:10px; font-size:.85rem; }
+  .sch { border-top:1px dashed var(--line); padding-top:8px; margin-top:8px; }
+  #toast { position:fixed; bottom:16px; right:16px; background:#1f3a2a; color:#9ff0c0; padding:10px 14px; border-radius:10px; display:none; max-width:80vw; }
+  #toast.err { background:#4a2020; color:#ffb0b0; }
+  .bars { display:flex; align-items:flex-end; gap:10px; height:120px; padding-top:8px; }
+  .bars .b { flex:1; max-width:90px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; font-size:.72rem; color:var(--mute); }
+  .bars .col { width:100%; background:#2a3a52; border-radius:4px 4px 0 0; position:relative; min-height:2px; }
+  .bars .col i { position:absolute; left:0; right:0; bottom:0; background:#ff8b8b; border-radius:4px 4px 0 0; display:block; }
+  .hide { display:none; }
+  .small { font-size:.8rem; color:var(--mute); }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div><h1>🛡️ Adblock DNS</h1><div class="sub" id="uptime">Đang tải...</div></div>
+  <div class="row" id="pausebtns">
+    <span class="small">Tạm tắt chặn:</span>
+    <button data-act="pause" data-min="10">10 phút</button>
+    <button data-act="pause" data-min="30">30 phút</button>
+    <button data-act="pause" data-min="60">1 giờ</button>
+    <button data-act="pause" data-min="0" class="on">Bật lại</button>
+  </div>
+</div>
+<div class="banner" id="banner"></div>
+<div class="tabs" id="tabs"></div>
+<div id="view"></div>
+<div id="toast"></div>
+
+<script>
+var TABS = [['overview','Tổng quan'],['categories','Danh mục'],['lists','Cho phép / Chặn'],['devices','Thiết bị & lịch'],['notify','Thông báo']];
+var DAYS = ['CN','T2','T3','T4','T5','T6','T7'];
+var tab = 'overview', S = null, ST = null, D = null;
+
+function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function $(s, r) { return (r || document).querySelector(s); }
+function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+
+function toast(msg, err) {
+  var t = $('#toast'); t.textContent = msg; t.className = err ? 'err' : ''; t.style.display = 'block';
+  clearTimeout(toast.t); toast.t = setTimeout(function () { t.style.display = 'none'; }, 3500);
+}
+
+async function api(action, body) {
+  try {
+    var res = await fetch('/api/' + action, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'adblock-dashboard' },
+      body: JSON.stringify(body || {})
+    });
+    var data = await res.json().catch(function () { return {}; });
+    if (!res.ok) { toast(data.error || ('Lỗi ' + res.status), true); return null; }
+    return data;
+  } catch (e) { toast('Không kết nối được server', true); return null; }
+}
+
+async function loadState() {
+  var res = await fetch('/api/state'); S = await res.json();
+  D = null; renderTab(); renderPause();
+}
+
+function catLabel(id) { return (S && S.categories[id] && S.categories[id].label) || (id === 'custom' ? 'Chặn riêng' : id); }
+function devName(ip) { var d = S && S.devices[ip]; return d && d.name ? d.name + ' (' + ip + ')' : ip; }
+
+function renderTabs() {
+  $('#tabs').innerHTML = TABS.map(function (t) { return '<button data-act="tab" data-id="' + t[0] + '"' + (t[0] === tab ? ' class="on"' : '') + '>' + t[1] + '</button>'; }).join('');
+}
+
+function renderPause() {
+  var b = $('#banner');
+  if (S && S.pausedUntil && S.pausedUntil > Date.now()) {
+    var left = Math.ceil((S.pausedUntil - Date.now()) / 60000);
+    b.style.display = 'block'; b.textContent = '⏸ Đang tạm tắt chặn (còn ' + left + ' phút). Mã độc và DoH vẫn bị chặn.';
+  } else { b.style.display = 'none'; if (S) S.pausedUntil = 0; }
+}
+
+function fmtUptime(sec) { return Math.floor(sec / 3600) + 'h ' + Math.floor((sec % 3600) / 60) + 'm hoạt động'; }
+
+/* ---------- Overview ---------- */
+function overviewHtml() {
+  if (!ST) return '<div class="sub">Đang tải...</div>';
+  var t = ST.today, blockedTotal = 0, cards = '';
+  Object.keys(t.blocked).forEach(function (k) { blockedTotal += t.blocked[k]; });
+  cards += '<div class="card"><div class="n">' + t.queries + '</div><div class="l">Truy vấn hôm nay</div></div>';
+  cards += '<div class="card"><div class="n">' + t.allowed + '</div><div class="l">Cho phép</div></div>';
+  cards += '<div class="card"><div class="n">' + blockedTotal + '</div><div class="l">Đã chặn</div></div>';
+  Object.keys(t.blocked).forEach(function (k) {
+    cards += '<div class="card"><div class="n">' + t.blocked[k] + '</div><div class="l">' + esc(catLabel(k)) + '</div></div>';
+  });
+  cards += '<div class="card"><div class="n">' + ST.suspiciousDga + '</div><div class="l">Nghi vấn DGA</div></div>';
+  cards += '<div class="card"><div class="n">' + ST.beaconAlerts + '</div><div class="l">Cảnh báo beaconing</div></div>';
+
+  var max = Math.max.apply(null, ST.history.map(function (h) { return h.queries; }).concat([1]));
+  var bars = ST.history.map(function (h) {
+    var hp = Math.round(h.queries / max * 100), bp = h.queries ? Math.round(h.blocked / h.queries * 100) : 0;
+    return '<div class="b" title="' + esc(h.date) + ': ' + h.queries + ' truy vấn, ' + h.blocked + ' chặn">' + h.queries +
+      '<div class="col" style="height:' + hp + '%"><i style="height:' + bp + '%"></i></div>' + esc(h.date.slice(5)) + '</div>';
+  }).join('') || '<div class="small">Chưa có lịch sử</div>';
+
+  var top = ST.topBlocked.map(function (d) {
+    return '<tr><td>' + esc(d.domain) + '</td><td>' + d.count + '</td><td><button class="sm" data-act="allow" data-d="' + esc(d.domain) + '">Cho phép</button></td></tr>';
+  }).join('') || '<tr><td colspan="3">Chưa có dữ liệu</td></tr>';
+
+  var clients = ST.clients.map(function (c) {
+    var known = S && S.devices[c.ip];
+    return '<tr><td>' + esc(devName(c.ip)) + '</td><td>' + c.queries + '</td><td>' + c.blocked + '</td><td>' +
+      (known ? '' : '<button class="sm" data-act="adddev" data-ip="' + esc(c.ip) + '">Đặt tên / quy tắc</button>') + '</td></tr>';
+  }).join('') || '<tr><td colspan="4">Chưa có dữ liệu</td></tr>';
+
+  var events = ST.recentEvents.map(function (e) {
+    return '<tr><td>' + new Date(e.time).toLocaleTimeString('vi-VN') + '</td><td><span class="tag ' + esc(e.type) + '">' + esc(catLabel(e.type)) + '</span></td><td>' + esc(e.domain) + '</td><td>' + esc(devName(e.client)) + '</td></tr>';
+  }).join('') || '<tr><td colspan="4">Chưa có hoạt động</td></tr>';
+
+  return '<div class="grid">' + cards + '</div>' +
+    '<h2>7 ngày gần đây <span class="small">(cột đỏ = phần bị chặn)</span></h2><div class="box"><div class="bars">' + bars + '</div></div>' +
+    '<h2>Top domain bị chặn hôm nay</h2><table><thead><tr><th>Domain</th><th>Lần</th><th></th></tr></thead><tbody>' + top + '</tbody></table>' +
+    '<h2>Thiết bị hôm nay</h2><table><thead><tr><th>Thiết bị</th><th>Truy vấn</th><th>Bị chặn</th><th></th></tr></thead><tbody>' + clients + '</tbody></table>' +
+    '<h2>Hoạt động gần đây</h2><table><thead><tr><th>Giờ</th><th>Loại</th><th>Domain</th><th>Thiết bị</th></tr></thead><tbody>' + events + '</tbody></table>';
+}
+
+/* ---------- Categories ---------- */
+function categoriesHtml() {
+  var upd = S.update, last = '';
+  if (upd.running) last = '⏳ Đang cập nhật...';
+  else if (upd.last) last = 'Lần cập nhật gần nhất: ' + new Date(upd.last.time).toLocaleString('vi-VN') + ' — ' + Object.keys(upd.last.results).map(function (k) {
+    var r = upd.last.results[k]; return esc(k) + (r.ok ? ' ✓ ' + r.count : ' ✗ ' + esc(r.error)); }).join('; ');
+  var html = '<div class="row"><button data-act="updatelists">⟳ Cập nhật danh sách ngay</button><span class="small">' + last + '</span></div>';
+  Object.keys(S.categories).forEach(function (id) {
+    var c = S.categories[id];
+    var srcs = c.sources.map(function (u) { return '<span class="chip">' + esc(u.replace(/^https:\/\//, '').slice(0, 70)) + '<button data-act="rmsrc" data-id="' + esc(id) + '" data-u="' + esc(u) + '">×</button></span>'; }).join('');
+    var doms = c.domains.map(function (d) { return '<span class="chip">' + esc(d) + '<button data-act="rmcatdom" data-id="' + esc(id) + '" data-d="' + esc(d) + '">×</button></span>'; }).join('');
+    var builtin = ['ads','malware','doh','gambling','porn','social'].indexOf(id) >= 0;
+    html += '<div class="box"><div class="row"><label class="ck"><input type="checkbox" data-act="togglecat" data-id="' + esc(id) + '"' + (c.enabled ? ' checked' : '') + '> <b>' + esc(c.label) + '</b></label>' +
+      '<span class="tag ' + esc(id) + '">' + esc(id) + '</span><span class="small">' + c.size + ' domain' + (c.essential ? ' · luôn chặn kể cả khi tạm tắt' : '') + '</span>' +
+      (builtin ? '' : '<button class="sm danger" data-act="delcat" data-id="' + esc(id) + '">Xóa</button>') + '</div>' +
+      '<div class="small">Nguồn tải:</div><div>' + (srcs || '<span class="small">(không có)</span>') + '</div>' +
+      '<div class="row"><input type="text" placeholder="https://.../hosts hoặc danh sách domain" data-in="src-' + esc(id) + '"><button class="sm" data-act="addsrc" data-id="' + esc(id) + '">Thêm nguồn</button></div>' +
+      '<div class="small">Domain thêm tay:</div><div>' + doms + '</div>' +
+      '<div class="row"><input type="text" placeholder="example.com" data-in="dom-' + esc(id) + '"><button class="sm" data-act="addcatdom" data-id="' + esc(id) + '">Thêm domain</button></div></div>';
+  });
+  html += '<h2>Tạo danh mục mới (vd: game)</h2><div class="row"><input type="text" placeholder="mã (vd: games)" data-in="newcat-id"><input type="text" placeholder="tên hiển thị" data-in="newcat-label"><button data-act="newcat">Tạo</button></div>' +
+    '<div class="small">Danh mục mới mặc định tắt. Thêm nguồn hoặc domain rồi bật, hoặc dùng trong lịch/thiết bị.</div>' +
+    '<div class="small">Gợi ý nguồn: Hagezi Pro <code>https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.txt</code> (thêm vào “Quảng cáo & tracker”).</div>';
+  return html;
+}
+
+/* ---------- Allow / Block lists ---------- */
+function chips(arr, act) {
+  return arr.map(function (d) { return '<span class="chip">' + esc(d) + '<button data-act="' + act + '" data-d="' + esc(d) + '">×</button></span>'; }).join('') || '<span class="small">(trống)</span>';
+}
+function listsHtml() {
+  return '<div class="box"><h2 style="margin-top:0">✅ Luôn cho phép (whitelist)</h2><div class="small">Ghi đè mọi danh mục, kể cả mã độc. Gỡ chặn domain cũng gỡ luôn các subdomain của nó.</div>' +
+    '<div class="row"><input type="text" placeholder="example.com" data-in="wl"><button data-act="addwl">Thêm</button></div><div>' + chips(S.whitelist, 'rmwl') + '</div></div>' +
+    '<div class="box"><h2 style="margin-top:0">⛔ Luôn chặn (blacklist)</h2><div class="small">Chặn cho tất cả thiết bị, kể cả thiết bị được miễn trừ.</div>' +
+    '<div class="row"><input type="text" placeholder="example.com" data-in="bl"><button data-act="addbl">Thêm</button></div><div>' + chips(S.blacklist, 'rmbl') + '</div></div>';
+}
+
+/* ---------- Devices ---------- */
+function catChecks(cls, selected) {
+  return Object.keys(S.categories).map(function (id) {
+    return '<label class="ck"><input type="checkbox" class="' + cls + '" value="' + esc(id) + '"' + (selected.indexOf(id) >= 0 ? ' checked' : '') + '> ' + esc(S.categories[id].label) + '</label>';
+  }).join('');
+}
+function schHtml(s) {
+  var days = DAYS.map(function (d, i) { return '<label class="ck"><input type="checkbox" class="sd" value="' + i + '"' + (s.days.indexOf(i) >= 0 ? ' checked' : '') + '> ' + d + '</label>'; }).join('');
+  return '<div class="sch"><div class="row">' + days + '</div><div class="row">Từ <input type="time" class="ss" value="' + esc(s.start) + '"> đến <input type="time" class="se" value="' + esc(s.end) + '"> <span class="small">(qua đêm nếu giờ kết thúc nhỏ hơn)</span></div>' +
+    '<div class="row"><span class="small">Chặn thêm:</span>' + catChecks('sc', s.categories) + '</div><button class="sm danger" data-act="rmsch">Xóa lịch này</button></div>';
+}
+function devHtml(ip, d) {
+  return '<div class="box dev"><div class="row"><input type="text" class="dip" placeholder="IP thiết bị (vd 192.168.1.50)" value="' + esc(ip) + '"><input type="text" class="dname" placeholder="Tên (vd: Điện thoại của con)" value="' + esc(d.name) + '"><button class="sm danger" data-act="rmdev">Xóa thiết bị</button></div>' +
+    '<div class="row"><span class="small">Luôn chặn thêm:</span>' + catChecks('alw', d.always) + '</div>' +
+    '<div class="row"><span class="small">Miễn trừ (không chặn):</span>' + catChecks('exm', d.exempt) + '</div>' +
+    '<div class="schs">' + d.schedules.map(schHtml).join('') + '</div><button class="sm" data-act="addsch">+ Thêm lịch</button></div>';
+}
+function devicesHtml() {
+  if (!D) D = JSON.parse(JSON.stringify({ devices: S.devices, globalSchedules: S.globalSchedules }));
+  var devs = Object.keys(D.devices).map(function (ip) { return devHtml(ip, D.devices[ip]); }).join('') || '<div class="small">Chưa có thiết bị nào. Nên đặt IP cố định (DHCP reservation) cho các thiết bị cần quy tắc riêng.</div>';
+  return '<div class="small">Giờ tính theo đồng hồ của máy chạy server.</div><h2>Lịch áp dụng cho mọi thiết bị</h2><div class="box"><div class="schs" id="gsch">' + D.globalSchedules.map(schHtml).join('') + '</div><button class="sm" data-act="addgsch">+ Thêm lịch chung</button></div>' +
+    '<h2>Thiết bị</h2><div id="devs">' + devs + '</div><div class="row"><button data-act="newdev">+ Thêm thiết bị</button><button class="on" data-act="savedev">Lưu thiết bị & lịch</button></div>';
+}
+function newSch() { return { days: [0,1,2,3,4,5,6], start: '22:00', end: '06:00', categories: [] }; }
+function readSch(el) {
+  return { days: $$('.sd', el).filter(function (x) { return x.checked; }).map(function (x) { return +x.value; }),
+    start: $('.ss', el).value, end: $('.se', el).value,
+    categories: $$('.sc', el).filter(function (x) { return x.checked; }).map(function (x) { return x.value; }) };
+}
+function collectDevices() {
+  var devs = {};
+  $$('#devs .dev').forEach(function (el) {
+    var ip = $('.dip', el).value.trim(); if (!ip) return;
+    devs[ip] = { name: $('.dname', el).value.trim(),
+      always: $$('.alw', el).filter(function (x) { return x.checked; }).map(function (x) { return x.value; }),
+      exempt: $$('.exm', el).filter(function (x) { return x.checked; }).map(function (x) { return x.value; }),
+      schedules: $$('.sch', el).map(readSch) };
+  });
+  D = { devices: devs, globalSchedules: $$('#gsch .sch').map(readSch) };
+}
+
+/* ---------- Notify ---------- */
+function notifyHtml() {
+  var n = S.notify;
+  var ev = [['malware','Domain mã độc bị chặn'],['beacon','Beaconing'],['dga','Domain nghi vấn (DGA)']].map(function (e) {
+    return '<label class="ck"><input type="checkbox" class="nev" value="' + e[0] + '"' + (n.events.indexOf(e[0]) >= 0 ? ' checked' : '') + '> ' + e[1] + '</label>'; }).join('');
+  return '<div class="box"><h2 style="margin-top:0">Telegram</h2><div class="small">Tạo bot với @BotFather để lấy token, rồi lấy chat id của bạn (vd qua @userinfobot).</div>' +
+    '<div class="row"><input type="password" id="tgtoken" placeholder="' + (n.telegram.set ? 'đã lưu: ' + esc(n.telegram.token) + ' (nhập để thay)' : 'Bot token') + '"><input type="text" id="tgchat" placeholder="Chat ID" value="' + esc(n.telegram.chatId) + '"></div>' +
+    '<h2>Discord</h2><div class="row"><input type="password" id="dcwh" placeholder="' + (n.discord.set ? 'đã lưu: ' + esc(n.discord.webhook) + ' (nhập để thay)' : 'Webhook URL') + '" style="min-width:320px"></div>' +
+    '<h2>Gửi thông báo khi</h2><div class="row">' + ev + '</div>' +
+    '<div class="row"><button class="on" data-act="savenotify">Lưu</button><button data-act="testnotify">Gửi tin thử</button><button class="danger" data-act="clearnotify">Xóa cấu hình</button></div></div>';
+}
+
+function renderTab() {
+  renderTabs();
+  var v = $('#view');
+  if (!S) return;
+  v.innerHTML = tab === 'overview' ? overviewHtml() : tab === 'categories' ? categoriesHtml() : tab === 'lists' ? listsHtml() : tab === 'devices' ? devicesHtml() : notifyHtml();
+}
+
+async function refreshStats() {
+  try {
+    var res = await fetch('/api/stats'); ST = await res.json();
+    $('#uptime').textContent = fmtUptime(ST.uptimeSeconds);
+    if (tab === 'overview') {
+      var y = window.scrollY; $('#view').innerHTML = overviewHtml(); window.scrollTo(0, y);
+    }
+  } catch (e) { $('#uptime').textContent = 'Không kết nối được server'; }
+}
+
+function val(name) { var el = $('[data-in="' + name + '"]'); return el ? el.value.trim() : ''; }
+
+document.addEventListener('click', async function (ev) {
+  var el = ev.target.closest('[data-act]'); if (!el) return;
+  var act = el.dataset.act, id = el.dataset.id, r;
+  var done = async function (res, msg) { if (res) { if (msg) toast(msg); await loadState(); } };
+  switch (act) {
+    case 'tab': if (tab === 'devices') collectDevices(); tab = id; renderTab(); break;
+    case 'pause': r = await api('pause', { minutes: +el.dataset.min }); if (r) { S.pausedUntil = r.pausedUntil; renderPause(); toast(+el.dataset.min ? 'Đã tạm tắt chặn' : 'Đã bật lại chặn'); } break;
+    case 'allow': await done(await api('whitelist', { add: el.dataset.d }), 'Đã cho phép ' + el.dataset.d); break;
+    case 'adddev': if (!S.devices[el.dataset.ip]) { await api('devices', { devices: Object.assign({}, S.devices, (function () { var o = {}; o[el.dataset.ip] = { name: '', always: [], exempt: [], schedules: [] }; return o; })()) }); } tab = 'devices'; await loadState(); break;
+    case 'updatelists': r = await api('update-lists'); if (r) { toast(r.started ? 'Bắt đầu cập nhật...' : 'Đang cập nhật rồi'); var n = 0, t = setInterval(async function () { await loadState(); if (!S.update.running || ++n > 40) clearInterval(t); }, 3000); } break;
+    case 'togglecat': await done(await api('category', { id: id, enabled: el.checked })); break;
+    case 'addsrc': await done(await api('source', { id: id, add: val('src-' + id) }), 'Đã thêm nguồn — bấm "Cập nhật danh sách ngay"'); break;
+    case 'rmsrc': await done(await api('source', { id: id, remove: el.dataset.u })); break;
+    case 'addcatdom': await done(await api('category-domains', { id: id, add: val('dom-' + id) })); break;
+    case 'rmcatdom': await done(await api('category-domains', { id: id, remove: el.dataset.d })); break;
+    case 'delcat': if (confirm('Xóa danh mục này?')) await done(await api('category-delete', { id: id })); break;
+    case 'newcat': await done(await api('category-create', { id: val('newcat-id'), label: val('newcat-label') }), 'Đã tạo danh mục'); break;
+    case 'addwl': await done(await api('whitelist', { add: val('wl') })); break;
+    case 'rmwl': await done(await api('whitelist', { remove: el.dataset.d })); break;
+    case 'addbl': await done(await api('blacklist', { add: val('bl') })); break;
+    case 'rmbl': await done(await api('blacklist', { remove: el.dataset.d })); break;
+    case 'newdev': collectDevices(); D.devices[''] = { name: '', always: [], exempt: [], schedules: [] }; renderTab(); break;
+    case 'rmdev': el.closest('.dev').remove(); collectDevices(); renderTab(); break;
+    case 'addsch': collectDevices(); var ip = $('.dip', el.closest('.dev')).value.trim(); if (D.devices[ip]) { D.devices[ip].schedules.push(newSch()); renderTab(); } else toast('Nhập IP thiết bị trước', true); break;
+    case 'addgsch': collectDevices(); D.globalSchedules.push(newSch()); renderTab(); break;
+    case 'rmsch': el.closest('.sch').remove(); collectDevices(); renderTab(); break;
+    case 'savedev': collectDevices(); await done(await api('devices', D), 'Đã lưu thiết bị & lịch'); break;
+    case 'savenotify':
+      var body = { events: $$('.nev').filter(function (x) { return x.checked; }).map(function (x) { return x.value; }), telegramChatId: $('#tgchat').value.trim() };
+      if ($('#tgtoken').value.trim()) body.telegramToken = $('#tgtoken').value.trim();
+      if ($('#dcwh').value.trim()) body.discordWebhook = $('#dcwh').value.trim();
+      await done(await api('notify', body), 'Đã lưu cấu hình thông báo'); break;
+    case 'clearnotify': await done(await api('notify', { telegramToken: '', telegramChatId: '', discordWebhook: '' }), 'Đã xóa cấu hình thông báo'); break;
+    case 'testnotify': r = await api('notify-test'); if (r) toast(r.error ? r.error : Object.keys(r).map(function (k) { return k + ': ' + r[k]; }).join(' · '), !!r.error); break;
+  }
+});
+document.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target.dataset.in) { var b = e.target.parentElement.querySelector('[data-act]'); if (b) b.click(); } });
+
+loadState().then(refreshStats);
+setInterval(refreshStats, 2000);
+setInterval(renderPause, 15000);
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+# Add one domain per line here to always allow it,
+# even if it appears in a blocklist. (Legacy file: the dashboard now manages this.)
+# Example:
+# ads.somesite-i-trust.com

@@ -1,0 +1,23 @@
+{
+  "name": "adblock-dns",
+  "version": "2.0.0",
+  "description": "A simple DNS-level ad blocker for your home network, written in Node.js",
+  "main": "index.js",
+  "scripts": {
+    "update-blocklist": "node update-blocklist.js",
+    "update-malwarelist": "node update-malwarelist.js",
+    "update-adultlist": "node update-adultlist.js",
+    "update-all": "node update-all.js",
+    "start": "node index.js",
+    "install-service": "node install-service.js",
+    "uninstall-service": "node uninstall-service.js",
+    "test": "node --test test/run.test.js"
+  },
+  "dependencies": {
+    "dns2": "^2.1.0",
+    "node-windows": "^1.0.0-beta.8"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

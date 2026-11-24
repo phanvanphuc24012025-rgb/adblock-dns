@@ -1,0 +1,23 @@
+# Known public DNS-over-HTTPS (DoH) / DNS-over-TLS endpoints.
+# Browsers (Chrome, Firefox, Edge) can auto-switch to "Secure DNS" using
+# one of these, which bypasses this ad/malware blocker entirely since the
+# lookups no longer go through your regular DNS. Blocking the endpoints
+# forces browsers to fail over to the plain DNS this server controls.
+# This is a static, hand-curated list (not auto-updated) — add more here
+# any time you find a provider your devices are using instead.
+
+cloudflare-dns.com
+mozilla.cloudflare-dns.com
+dns.google
+dns.google.com
+dns.quad9.net
+doh.opendns.com
+doh.cleanbrowsing.org
+security.cloudflare-dns.com
+family.cloudflare-dns.com
+dns.adguard.com
+dns.adguard-dns.com
+doh.dns.sb
+doh.libredns.gr
+dns.nextdns.io
+doh.familyshield.opendns.com
